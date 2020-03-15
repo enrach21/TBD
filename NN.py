@@ -20,14 +20,14 @@ def dSigmoid(Z):
     dZ = s * (1-s)
     return dZ
 def tanh(Z):
-    return (np.exp(x)-np.exp(-x))/(np.exp(x)+np.exp(-x))
+    return (np.exp(Z)-np.exp(-Z))/(np.exp(Z)+np.exp(-Z))
 def dtanh(Z):
-    t = (np.exp(x)-np.exp(-x))/(np.exp(x)+np.exp(-x))
+    t = (np.exp(Z)-np.exp(-Z))/(np.exp(Z)+np.exp(-Z))
     dZ=1-t**2
     return dZ
 
 class dlnet:
-    def __init__(self, x, y, lr=3, d1=68, h=50, d2=1):
+    def __init__(self, x, y, lr=3, d1=981, h=200, d2=10):
         # print(h)
         self.X=x # holds the input layer rows are features, columns are samples
         self.Y=y # desired output to train network
@@ -55,16 +55,27 @@ class dlnet:
         return
     
     def forward(self):    
-            Z1 = self.param['W1'].dot(self.X) + self.param['b1'] 
-            A1 = Sigmoid(Z1)
-            self.ch['Z1'],self.ch['A1']=Z1,A1
+        Z1 = self.param['W1'].dot(self.X) + self.param['b1'] 
+        A1 = Sigmoid(Z1)
+        self.ch['Z1'],self.ch['A1']=Z1,A1
 
-            Z2 = self.param['W2'].dot(A1) + self.param['b2']  
-            A2 = Sigmoid(Z2)
-            self.ch['Z2'],self.ch['A2']=Z2,A2
-            self.Yh=A2
-            loss=self.MSE_Loss(A2)
-            return self.Yh, loss
+        Z2 = self.param['W2'].dot(A1) + self.param['b2']  
+        A2 = Sigmoid(Z2)
+        self.ch['Z2'],self.ch['A2']=Z2,A2
+        self.Yh=A2
+        loss=self.MSE_Loss(A2)
+        return self.Yh, loss
+    
+    # def forward(self):    
+    #        Z1 = self.param['W1'].dot(self.X) + self.param['b1'] 
+    #        A1 = Sigmoid(Z1)
+    #        self.ch['Z1'],self.ch['A1']=Z1,A1
+    #        Z2 = self.param['W2'].dot(A1) + self.param['b2']  
+    #        A2 = Sigmoid(Z2)
+    #        self.ch['Z2'],self.ch['A2']=Z2,A2
+    #        self.Yh=A2
+    #        loss=self.MSE_Loss(A2)
+    #        return self.Yh, loss
     
     def test(self, input, output):
             Z1 = self.param['W1'].dot(input) + self.param['b1'] 
@@ -75,7 +86,8 @@ class dlnet:
             A2 = Sigmoid(Z2)
             # self.ch['Z2'],self.ch['A2']=Z2,A2
             # self.Yh=A2
-            loss = (1./110) * (-np.dot(output,np.log(A2).T) - np.dot(1-output, np.log(1-A2).T))
+            squared_errors = (A2 - output) ** 2
+            loss = (1./input.shape[1])*np.sum(squared_errors)
             return A2, loss
        
     def Final_test(self, input):
@@ -100,8 +112,15 @@ class dlnet:
         return loss
     
     def backward(self):
-        dLoss_Yh = - (np.divide(self.Y, self.Yh ) - np.divide(1 - self.Y, 1 - self.Yh))    
-        dLoss_Z2 = dLoss_Yh * dSigmoid(self.ch['Z2'])    
+        #dLoss_Yh = - (np.divide(self.Y, self.Yh ) - np.divide(1 - self.Y, 1 - self.Yh))    
+        squared_errors = (self.Y - self.Yh) 
+        # print(squared_errors)
+        # print(np.sum(squared_errors, axis=1))
+        dLoss_Yh = - (2/self.Yh.shape[1])*(squared_errors)
+        # print(dLoss_Yh.shape)
+        # dLoss_Yh = np.array(dLoss_Yh).reshape(13,1)
+        dLoss_Z2 = dLoss_Yh * dSigmoid(self.ch['Z2'])
+        # print(dLoss_Z2.shape)
         dLoss_A1 = np.dot(self.param["W2"].T,dLoss_Z2)
         dLoss_W2 = 1./self.ch['A1'].shape[1] * np.dot(dLoss_Z2,self.ch['A1'].T)
         dLoss_b2 = 1./self.ch['A1'].shape[1] * np.dot(dLoss_Z2, np.ones([dLoss_Z2.shape[1],1])) 
@@ -141,7 +160,53 @@ class dlnet:
         return
     
 
-def test_NN(k1,k2,k3,k4, output, lr=3, h=50):
+def K_fold_NN(k1, k2, k3, O1, O2, O3, lr=3, h=200):
+    train1 = np.append(k1, k2, axis=1)
+    train_out1 = np.append(O1, O2, axis=1)
+    test1 = k3
+    test_out1 = O3
+    
+    train2 = np.append(k1, k3, axis=1)
+    train_out2 = np.append(O1, O3, axis=1)
+    test2 = k2
+    test_out2 = O2
+    
+    train3 = np.append(k2, k3, axis=1)
+    train_out3 = np.append(O2, O3, axis=1)
+    test3 = k1
+    test_out3 = O1
+       
+    NN1 = dlnet(train1, train_out1, lr=lr, h=h)
+    NN1.gd(train1, train_out1,test = test1, out = test_out1, iter = 1000)
+    plt.figure(figsize=(15,5))
+    plt.plot(NN1.epoch_list, NN1.error_history, color = 'blue')
+    plt.plot(NN1.epoch_list, NN1.error_test, color = 'red')
+    plt.xlabel('Epoch')
+    plt.ylabel('Error')
+    plt.show()
+    
+    NN2 = dlnet(train2, train_out2, lr=lr, h=h)
+    NN2.gd(train2, train_out2,test = test2, out = test_out2, iter = 1000)
+    plt.figure(figsize=(15,5))
+    plt.plot(NN1.epoch_list, NN1.error_history, color = 'blue')
+    plt.plot(NN1.epoch_list, NN1.error_test, color = 'red')
+    plt.xlabel('Epoch')
+    plt.ylabel('Error')
+    plt.show()
+    
+    NN3 = dlnet(train3, train_out3, lr=lr, h=h)
+    NN3.gd(train3, train_out3,test = test3, out = test_out3, iter = 1000)
+    plt.figure(figsize=(15,5))
+    plt.plot(NN1.epoch_list, NN1.error_history, color = 'blue')
+    plt.plot(NN1.epoch_list, NN1.error_test, color = 'red')
+    plt.xlabel('Epoch')
+    plt.ylabel('Error')
+    plt.show()
+    
+    results = (NN1.test(test1, test_out1)[1]+ NN2.test(test2, test_out2)[1]+NN3.test(test3, test_out3)[1])/3
+    return results
+    
+def test_NN(k1,k2,k3, output, lr=3, h=50):
     train1 = np.append(k1, k2, axis =0)
     train1 = np.append(train1, k3, axis =0)
     test1 = k4
@@ -200,3 +265,31 @@ def test_NN(k1,k2,k3,k4, output, lr=3, h=50):
 
     results = (NN1.test(test1.T, k_out.reshape(len(k_out),1).T)[1]+ NN2.test(test2.T, k_out.reshape(len(k_out),1).T)[1]+NN3.test(test3.T, k_out.reshape(len(k_out),1).T)[1]+NN4.test(test4.T, k_out.reshape(len(k_out),1).T)[1])/4
     return results
+
+
+def scale(data):
+    return (data+5)/10
+
+def get_top_var(data, data2, cutoff, T='mean'):
+    var_filt = data[data > cutoff]
+    print('Genes over cutoff...')
+    print(len(var_filt))
+    i = var_filt.index
+    i
+    var_genes = data2[i].T
+    print(var_genes.shape)
+    # Get average experesion in each column
+    exp_mean=var_genes.mean(axis=1)
+    # Get median experesion in each column
+    exp_median=var_genes.median(axis=1)
+    
+    # Get cell lines with no info and fill in the averages
+    na_exp_genes= var_genes.columns[var_genes.isnull().any(axis=0)]
+    if len(na_exp_genes) > 0:
+        if T == 'mean':
+            for x in var_genes[na_exp_genes]:
+                var_genes[x]=exp_mean
+        else:
+            for x in var_genes[na_exp_genes]:
+                var_genes[x]=exp_median
+    return var_genes
